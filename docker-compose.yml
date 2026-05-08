@@ -1,0 +1,26 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: educloud-backend
+    restart: unless-stopped
+    volumes:
+      - /mnt/ssd/Personal:/mnt/ssd/Personal
+    networks:
+      proxy-net:
+        ipv4_address: 172.21.0.31
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: educloud-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      proxy-net:
+        ipv4_address: 172.21.0.32
+
+networks:
+  proxy-net:
+    external: true

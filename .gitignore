@@ -1,0 +1,29 @@
+# Dependencies
+frontend/node_modules/
+
+
+# Build output
+frontend/dist/
+frontend/build/
+
+# Environment variables - NEVER commit these
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.override.yml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
