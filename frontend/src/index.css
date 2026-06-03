@@ -29,3 +29,24 @@ body {
   0%   { transform: translateX(-250%); }
   100% { transform: translateX(350%); }
 }
+
+@media (max-width: 640px) {
+  .header {
+    flex-wrap: wrap;
+    padding: 0.75rem 1rem !important;
+  }
+  .header-search {
+    order: 3;
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+  }
+  .header-btn-label {
+    display: none;
+  }
+  .main-content {
+    padding: 1rem !important;
+  }
+  .file-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
+  }
+}

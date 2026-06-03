@@ -161,7 +161,7 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       {/* Header */}
-      <header style={{
+      <header className="header" style={{
         borderBottom: '1px solid var(--border)',
         padding: '1rem 2rem',
         display: 'flex',
@@ -185,7 +185,7 @@ export default function App() {
         </div>
 
         {/* Search */}
-        <div style={{ display: 'flex', gap: '0.5rem', flex: 1, maxWidth: '400px' }}>
+        <div className="header-search" style={{ display: 'flex', gap: '0.5rem', flex: 1, maxWidth: '400px' }}>
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -248,7 +248,7 @@ export default function App() {
           }}
         >
           <Upload size={15} />
-          {uploading ? 'Uploading...' : 'Upload'}
+          <span className="header-btn-label">{uploading ? 'Uploading...' : 'Upload'}</span>
         </button>
         <input
           ref={fileInput}
@@ -276,11 +276,11 @@ export default function App() {
           }}
         >
           <FolderPlus size={15} />
-          New Folder
+          <span className="header-btn-label">New Folder</span>
         </button>
       </header>
 
-      <div style={{ padding: '1.5rem 2rem' }}>
+      <div className="main-content" style={{ padding: '1.5rem 2rem' }}>
         {/* Breadcrumbs */}
         {!searchResults && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
@@ -322,7 +322,7 @@ export default function App() {
         ) : displayItems.length === 0 ? (
           <div style={{ color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.8rem' }}>Empty folder</div>
         ) : (
-          <div style={{
+          <div className="file-grid" style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
             gap: '0.75rem'
@@ -507,58 +507,106 @@ export default function App() {
           right: '1.5rem',
           background: 'var(--surface)',
           border: '1px solid var(--border-hover)',
-          borderRadius: '10px',
-          padding: '0.75rem 1rem',
-          width: '240px',
+          borderRadius: '12px',
+          width: '300px',
           zIndex: 200,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.6)'
+          boxShadow: '0 12px 32px rgba(0,0,0,0.7)',
+          overflow: 'hidden'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+          {/* Card header */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.75rem 1rem',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--surface-hover)'
+          }}>
             {transfer.type === 'upload'
-              ? <Upload size={12} color="var(--green-text)" />
-              : <Download size={12} color="var(--orange)" />}
+              ? <Upload size={14} color="var(--green-text)" />
+              : <Download size={14} color="var(--orange)" />}
             <span style={{
-              fontSize: '0.72rem',
-              color: 'var(--text-muted)',
-              fontFamily: 'JetBrains Mono, monospace',
               flex: 1,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              color: 'var(--text)',
+              fontFamily: 'Space Grotesk, sans-serif'
             }}>
-              {transfer.name}
+              {transfer.type === 'upload' ? 'Uploading…' : 'Downloading…'}
             </span>
-            {transfer.progress !== null && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
-                {transfer.progress}%
-              </span>
-            )}
             <button
               onClick={handleCancelTransfer}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
               title="Cancel"
+              style={{
+                background: 'var(--border-hover)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '22px',
+                height: '22px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}
             >
-              <X size={11} color="var(--text-muted)" />
+              <X size={12} color="var(--text-muted)" />
             </button>
           </div>
-          <div style={{ height: '3px', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
-            {transfer.progress !== null ? (
-              <div style={{
-                height: '100%',
-                width: `${transfer.progress}%`,
-                background: transfer.type === 'upload' ? 'var(--green-text)' : 'var(--orange)',
-                borderRadius: '2px',
-                transition: 'width 0.15s ease'
-              }} />
-            ) : (
-              <div style={{
-                height: '100%',
-                width: '40%',
-                background: transfer.type === 'upload' ? 'var(--green-text)' : 'var(--orange)',
-                borderRadius: '2px',
-                animation: 'slide-indeterminate 1.4s ease-in-out infinite'
-              }} />
-            )}
+
+          {/* File row */}
+          <div style={{ padding: '0.85rem 1rem' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '0.6rem',
+              gap: '0.5rem'
+            }}>
+              <span style={{
+                fontSize: '0.78rem',
+                color: 'var(--text-muted)',
+                fontFamily: 'JetBrains Mono, monospace',
+                flex: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}>
+                {transfer.name}
+              </span>
+              {transfer.progress !== null && (
+                <span style={{
+                  fontSize: '0.75rem',
+                  color: transfer.type === 'upload' ? 'var(--green-text)' : 'var(--orange)',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  flexShrink: 0,
+                  fontWeight: 600
+                }}>
+                  {transfer.progress}%
+                </span>
+              )}
+            </div>
+
+            {/* Progress bar */}
+            <div style={{ height: '5px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
+              {transfer.progress !== null ? (
+                <div style={{
+                  height: '100%',
+                  width: `${transfer.progress}%`,
+                  background: transfer.type === 'upload' ? 'var(--green-text)' : 'var(--orange)',
+                  borderRadius: '3px',
+                  transition: 'width 0.2s ease'
+                }} />
+              ) : (
+                <div style={{
+                  height: '100%',
+                  width: '40%',
+                  background: transfer.type === 'upload' ? 'var(--green-text)' : 'var(--orange)',
+                  borderRadius: '3px',
+                  animation: 'slide-indeterminate 1.4s ease-in-out infinite'
+                }} />
+              )}
+            </div>
           </div>
         </div>
       )}
