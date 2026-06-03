@@ -1,8 +1,9 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -76,6 +77,28 @@ def preview_file(path: str):
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(path=target, filename=target.name)
+
+@app.get("/files/stream")
+def stream_file(path: str):
+    target = resolve(path)
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    cmd = [
+        "ffmpeg", "-i", str(target),
+        "-c:v", "copy",
+        "-c:a", "aac", "-b:a", "192k",
+        "-f", "mp4", "-movflags", "frag_keyframe+empty_moov",
+        "pipe:1"
+    ]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    def generate():
+        try:
+            while chunk := proc.stdout.read(65536):
+                yield chunk
+        finally:
+            proc.kill()
+            proc.wait()
+    return StreamingResponse(generate(), media_type="video/mp4")
 
 @app.post("/files/upload")
 async def upload_file(path: str = "/", file: UploadFile = File(...)):

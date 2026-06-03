@@ -3,7 +3,7 @@ import axios from 'axios'
 import {
   Folder, File, Image, Film, Music, FileText, Download,
   Trash2, Upload, Search, X, ChevronRight, Home, Cloud,
-  Eye, FolderPlus
+  Eye, FolderPlus, Palette
 } from 'lucide-react'
 
 const API = '/api/cloud'
@@ -49,6 +49,10 @@ export default function App() {
   const [transfer, setTransfer] = useState(null)
   const [newFolderOpen, setNewFolderOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
+  const [folderColors, setFolderColors] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('folderColors') || '{}') } catch { return {} }
+  })
+  const [colorPickerOpen, setColorPickerOpen] = useState(null)
   const fileInput = useRef()
   const abortRef = useRef(null)
 
@@ -154,6 +158,15 @@ export default function App() {
     } catch (e) {
       console.error(e)
     }
+  }
+
+  const FOLDER_COLORS = ['#e8732a','#4a9eff','#4a8c6a','#9b59b6','#e05555','#2aa8a8','#e8c12a','#e84a8c']
+
+  const saveFolderColor = (folderPath, color) => {
+    const updated = { ...folderColors, [folderPath]: color }
+    setFolderColors(updated)
+    localStorage.setItem('folderColors', JSON.stringify(updated))
+    setColorPickerOpen(null)
   }
 
   const displayItems = searchResults || items
@@ -329,7 +342,7 @@ export default function App() {
           }}>
             {displayItems.map(item => {
               const { icon: Icon, color } = item.is_dir
-                ? { icon: Folder, color: 'var(--orange)' }
+                ? { icon: Folder, color: folderColors[item.path] || 'var(--orange)' }
                 : getFileIcon(item.extension || '')
 
               return (
@@ -376,7 +389,8 @@ export default function App() {
                     gap: '0.4rem',
                     marginTop: '0.75rem',
                     paddingTop: '0.75rem',
-                    borderTop: '1px solid var(--border)'
+                    borderTop: '1px solid var(--border)',
+                    position: 'relative'
                   }}>
                     {!item.is_dir && isPreviewable(item.extension) && (
                       <button
@@ -412,22 +426,82 @@ export default function App() {
                         <Download size={13} color="var(--text-muted)" />
                       </button>
                     )}
-                    <button
-                      onClick={e => { e.stopPropagation(); setDeleteConfirm(item) }}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        borderRadius: '6px',
-                        padding: '0.3rem 0.5rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        marginLeft: 'auto'
-                      }}
-                      title="Delete"
-                    >
-                      <Trash2 size={13} color="#666" />
-                    </button>
+
+                    {/* Folder color + delete grouped on the right */}
+                    <div style={{ display: 'flex', gap: '0.3rem', marginLeft: 'auto', alignItems: 'center' }}>
+                      {item.is_dir && (
+                        <>
+                          {colorPickerOpen === item.path && (
+                            <div
+                              onClick={e => e.stopPropagation()}
+                              style={{
+                                position: 'absolute',
+                                bottom: '2.2rem',
+                                right: 0,
+                                background: 'var(--surface-hover)',
+                                border: '1px solid var(--border-hover)',
+                                borderRadius: '8px',
+                                padding: '0.4rem',
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: '0.35rem',
+                                width: '120px',
+                                zIndex: 20,
+                                boxShadow: '0 4px 16px rgba(0,0,0,0.5)'
+                              }}
+                            >
+                              {FOLDER_COLORS.map(c => (
+                                <button
+                                  key={c}
+                                  onClick={e => { e.stopPropagation(); saveFolderColor(item.path, c) }}
+                                  style={{
+                                    width: '20px',
+                                    height: '20px',
+                                    borderRadius: '50%',
+                                    background: c,
+                                    border: (folderColors[item.path] || '#e8732a') === c
+                                      ? '2px solid white'
+                                      : '2px solid transparent',
+                                    cursor: 'pointer',
+                                    padding: 0
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          )}
+                          <button
+                            onClick={e => { e.stopPropagation(); setColorPickerOpen(colorPickerOpen === item.path ? null : item.path) }}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '0.3rem 0.5rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                            title="Change color"
+                          >
+                            <Palette size={13} color="#666" />
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={e => { e.stopPropagation(); setDeleteConfirm(item) }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '0.3rem 0.5rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                        title="Delete"
+                      >
+                        <Trash2 size={13} color="#666" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )
@@ -478,7 +552,10 @@ export default function App() {
             )}
             {['.mp4', '.webm', '.mkv', '.mov'].includes(preview.extension) && (
               <video controls style={{ width: '100%', maxHeight: '80vh', borderRadius: '8px' }}>
-                <source src={`${API}/files/preview?path=${encodeURIComponent(preview.path)}`} />
+                <source src={preview.extension === '.mkv'
+                  ? `${API}/files/stream?path=${encodeURIComponent(preview.path)}`
+                  : `${API}/files/preview?path=${encodeURIComponent(preview.path)}`}
+                />
               </video>
             )}
             {['.mp3', '.wav', '.ogg', '.m4a'].includes(preview.extension) && (
