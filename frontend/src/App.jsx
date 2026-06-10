@@ -53,6 +53,7 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('folderColors') || '{}') } catch { return {} }
   })
   const [colorPickerOpen, setColorPickerOpen] = useState(null)
+  const [thumbErrors, setThumbErrors] = useState(new Set())
   const fileInput = useRef()
   const abortRef = useRef(null)
 
@@ -160,7 +161,7 @@ export default function App() {
     }
   }
 
-  const FOLDER_COLORS = ['#e8732a','#4a9eff','#4a8c6a','#9b59b6','#e05555','#2aa8a8','#e8c12a','#e84a8c']
+  const FOLDER_COLORS = ['#e8732a','#4a9eff','#4a8c6a','#9b59b6','#e05555','#2aa8a8','#e8c12a','#888888']
 
   const saveFolderColor = (folderPath, color) => {
     const updated = { ...folderColors, [folderPath]: color }
@@ -185,7 +186,10 @@ export default function App() {
         background: 'var(--bg)',
         zIndex: 10
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: 'auto' }}>
+        <div
+          onClick={() => load('/')}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: 'auto', cursor: 'pointer' }}
+        >
           <Cloud size={20} color="var(--orange)" />
           <span style={{
             fontFamily: 'JetBrains Mono, monospace',
@@ -345,6 +349,9 @@ export default function App() {
                 ? { icon: Folder, color: folderColors[item.path] || 'var(--orange)' }
                 : getFileIcon(item.extension || '')
 
+              const THUMB_EXTS = ['.jpg','.jpeg','.png','.gif','.webp','.bmp','.mp4','.mkv','.avi','.mov','.webm']
+              const showThumb = !item.is_dir && THUMB_EXTS.includes(item.extension || '') && !thumbErrors.has(item.path)
+
               return (
                 <div
                   key={item.path}
@@ -367,7 +374,22 @@ export default function App() {
                   }}
                   onClick={() => item.is_dir && load(item.path)}
                 >
-                  <Icon size={28} color={color} style={{ marginBottom: '0.6rem' }} />
+                  {showThumb ? (
+                    <img
+                      src={`${API}/files/thumbnail?path=${encodeURIComponent(item.path)}`}
+                      onError={() => setThumbErrors(prev => new Set([...prev, item.path]))}
+                      style={{
+                        width: '100%',
+                        height: '120px',
+                        objectFit: 'cover',
+                        borderRadius: '6px',
+                        marginBottom: '0.6rem',
+                        display: 'block'
+                      }}
+                    />
+                  ) : (
+                    <Icon size={28} color={color} style={{ marginBottom: '0.6rem' }} />
+                  )}
                   <div style={{
                     fontSize: '0.82rem',
                     fontWeight: 500,

@@ -4,8 +4,16 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import shutil
 import subprocess
+import hashlib
 from pathlib import Path
 from typing import Optional
+from PIL import Image
+
+THUMB_CACHE = Path("/tmp/educloud_thumbs")
+THUMB_CACHE.mkdir(exist_ok=True)
+
+THUMB_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'}
+THUMB_VIDEO_EXTS = {'.mp4', '.mkv', '.avi', '.mov', '.webm'}
 
 app = FastAPI(title="eduCloud API")
 
@@ -77,6 +85,41 @@ def preview_file(path: str):
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(path=target, filename=target.name)
+
+@app.get("/files/thumbnail")
+def get_thumbnail(path: str):
+    target = resolve(path)
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    ext = target.suffix.lower()
+    if ext not in THUMB_IMAGE_EXTS and ext not in THUMB_VIDEO_EXTS:
+        raise HTTPException(status_code=400, detail="Not a supported media file")
+    mtime = target.stat().st_mtime
+    cache_key = hashlib.md5(f"{path}{mtime}".encode()).hexdigest()
+    cache_file = THUMB_CACHE / f"{cache_key}.jpg"
+    if not cache_file.exists():
+        if ext in THUMB_IMAGE_EXTS:
+            _make_image_thumb(target, cache_file)
+        else:
+            _make_video_thumb(target, cache_file)
+    if not cache_file.exists():
+        raise HTTPException(status_code=500, detail="Thumbnail generation failed")
+    return FileResponse(cache_file, media_type="image/jpeg")
+
+def _make_image_thumb(src: Path, dest: Path):
+    with Image.open(src) as img:
+        img.thumbnail((300, 300))
+        img.convert("RGB").save(dest, "JPEG", quality=75)
+
+def _make_video_thumb(src: Path, dest: Path):
+    for seek in ["00:00:05", "00:00:00"]:
+        subprocess.run(
+            ["ffmpeg", "-ss", seek, "-i", str(src), "-vframes", "1",
+             "-vf", "scale=300:-1", "-f", "image2", str(dest), "-y"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        if dest.exists():
+            break
 
 @app.get("/files/stream")
 def stream_file(path: str):
