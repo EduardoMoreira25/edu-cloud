@@ -31,6 +31,14 @@ body {
 }
 
 @media (max-width: 640px) {
+  .select-circle {
+    display: none !important;
+  }
+  .file-preview-btn {
+    display: none !important;
+  }
+
+
   .header {
     flex-wrap: wrap;
     padding: 0.75rem 1rem !important;

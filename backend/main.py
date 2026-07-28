@@ -1,12 +1,16 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Query
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Body
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import os
+import io
+import json
 import shutil
 import subprocess
 import hashlib
+import zipfile
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from PIL import Image
 
 THUMB_CACHE = Path("/tmp/educloud_thumbs")
@@ -25,6 +29,15 @@ app.add_middleware(
 )
 
 ROOT = Path("/mnt/ssd/Personal")
+META_DIR = ROOT / ".educloud"
+COLORS_FILE = META_DIR / "folder_colors.json"
+
+def _ensure_meta():
+    META_DIR.mkdir(exist_ok=True)
+    if not COLORS_FILE.exists():
+        COLORS_FILE.write_text("{}")
+
+_ensure_meta()
 
 def resolve(path: str) -> Path:
     resolved = (ROOT / path.lstrip("/")).resolve()
@@ -38,6 +51,7 @@ def file_info(p: Path, root: Path) -> dict:
         "name": p.name,
         "path": "/" + str(p.relative_to(root)),
         "is_dir": p.is_dir(),
+        "is_symlink": p.is_symlink(),
         "size": stat.st_size if p.is_file() else None,
         "modified": stat.st_mtime,
         "extension": p.suffix.lower() if p.is_file() else None,
@@ -50,22 +64,23 @@ def list_files(path: str = "/"):
         raise HTTPException(status_code=404, detail="Path not found")
     if not target.is_dir():
         raise HTTPException(status_code=400, detail="Not a directory")
-    
+
     items = []
     for p in sorted(target.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+        if p.name == '.educloud':
+            continue
         try:
             items.append(file_info(p, ROOT))
         except:
             continue
-    
-    # Build breadcrumbs
+
     rel = Path(path.lstrip("/"))
     breadcrumbs = [{"name": "Personal", "path": "/"}]
     current = Path("/")
     for part in rel.parts:
         current = current / part
         breadcrumbs.append({"name": part, "path": str(current)})
-    
+
     return {"path": path, "items": items, "breadcrumbs": breadcrumbs}
 
 @app.get("/files/download")
@@ -73,11 +88,7 @@ def download_file(path: str):
     target = resolve(path)
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(
-        path=target,
-        filename=target.name,
-        media_type="application/octet-stream"
-    )
+    return FileResponse(path=target, filename=target.name, media_type="application/octet-stream")
 
 @app.get("/files/preview")
 def preview_file(path: str):
@@ -168,13 +179,23 @@ def make_directory(path: str = "/", name: str = ""):
 
 @app.delete("/files")
 def delete_file(path: str):
-    target = resolve(path)
-    if not target.exists():
+    # Resolve parent only — do not follow the final component if it's a symlink
+    p = ROOT / path.lstrip("/")
+    try:
+        parent = p.parent.resolve(strict=True)
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Not found")
-    if target.is_dir():
-        shutil.rmtree(target)
-    else:
+    if not str(parent).startswith(str(ROOT)):
+        raise HTTPException(status_code=403, detail="Access denied")
+    target = parent / p.name
+    if not str(target).startswith(str(ROOT)):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not target.exists() and not target.is_symlink():
+        raise HTTPException(status_code=404, detail="Not found")
+    if target.is_symlink() or target.is_file():
         target.unlink()
+    else:
+        shutil.rmtree(target)
     return {"message": "Deleted"}
 
 @app.get("/files/search")
@@ -189,3 +210,67 @@ def search_files(q: str = Query(..., min_length=1)):
         if len(results) >= 100:
             break
     return {"query": q, "results": results}
+
+@app.post("/files/move")
+def move_file(src: str, dest_dir: str):
+    src_path = resolve(src)
+    dest_path = resolve(dest_dir)
+    if not src_path.exists():
+        raise HTTPException(status_code=404, detail="Source not found")
+    if not dest_path.is_dir():
+        raise HTTPException(status_code=400, detail="Destination is not a directory")
+    dest_file = dest_path / src_path.name
+    if dest_file.exists():
+        raise HTTPException(status_code=409, detail="A file with that name already exists in the destination")
+    shutil.move(str(src_path), str(dest_file))
+    return {"message": "Moved", "path": "/" + str(dest_file.relative_to(ROOT))}
+
+@app.post("/files/symlink")
+def create_symlink(src: str, dest_dir: str):
+    src_path = resolve(src)
+    dest_path = resolve(dest_dir)
+    if not src_path.exists():
+        raise HTTPException(status_code=404, detail="Source not found")
+    if not dest_path.is_dir():
+        raise HTTPException(status_code=400, detail="Destination is not a directory")
+    link_path = dest_path / src_path.name
+    if link_path.exists() or link_path.is_symlink():
+        raise HTTPException(status_code=409, detail="A file with that name already exists in the destination")
+    rel_target = os.path.relpath(str(src_path), str(dest_path))
+    os.symlink(rel_target, str(link_path))
+    return {"message": "Linked", "path": "/" + str(link_path.relative_to(ROOT))}
+
+@app.post("/files/download-zip")
+def download_zip(paths: List[str] = Body(...)):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for path in paths:
+            try:
+                target = resolve(path)
+                if target.is_file():
+                    zf.write(target, target.name)
+            except:
+                continue
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=download.zip"}
+    )
+
+@app.get("/meta/folder-colors")
+def get_folder_colors():
+    _ensure_meta()
+    return json.loads(COLORS_FILE.read_text())
+
+class ColorUpdate(BaseModel):
+    path: str
+    color: str
+
+@app.patch("/meta/folder-color")
+def set_folder_color(body: ColorUpdate):
+    _ensure_meta()
+    colors = json.loads(COLORS_FILE.read_text())
+    colors[body.path] = body.color
+    COLORS_FILE.write_text(json.dumps(colors))
+    return {"ok": True}
